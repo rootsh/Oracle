@@ -1,0 +1,187 @@
+#!/bin/bash
+#
+# Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+# 
+
+# chkconfig: 345 90 30
+# description: Oracle HTTP Server startup script
+
+# Author: Chris Johnson (christopher.johnson@oracle.com)
+
+# Please Note that this was written for my own purposes. It may or may
+# not work in your environment.
+
+# When you install this scroll down and edit the environment variables
+# below to match up with your environment.
+
+
+ORACLE_INSTANCE=/u01/middleware/user_projects/domains/systur
+COMPONENT_NAME=ohs1
+OHSOWNER=oracle
+
+#export ORACLE_INSTANCE
+#PATH=$PATH:$ORACLE_INSTANCE/bin
+
+
+##### DO NOT EDIT BELOW HERE #####
+##################################
+
+
+if [ -f /lib/lsb/init-functions ]
+then
+        . /lib/lsb/init-functions
+elif [ -f /etc/init.d/functions ]
+then
+        . /etc/init.d/functions
+fi
+
+if [ "" == "$USER" ]; then
+    USER=`whoami`
+fi
+
+if [ "$USER" == "root" ] ; then
+    # if we're running as root we will need to su to stop or start the server
+    SUCOMMAND_START="/bin/su - $OHSOWNER -c \""
+    SUCOMMAND_END="\""
+
+else
+    # otherwise we don't need a su command
+    SUCOMMAND_START=""
+    SUCOMMAND_END=""
+fi
+
+
+
+usage()
+{
+  #echo "Usage: $0 {start|stop|stopall|restart}"
+  echo "Usage (as root):"
+  echo "  $0 {start|stop|restart|install|register}"
+  echo "Usage (as $OHSOWNER):"
+  echo "  $0 {start|stop|restart}"
+  exit 2
+
+}
+
+install() {
+  if [ "$USER" == "root" ] ; then
+      echo Copying $0 to /etc/init.d
+      cp $0 /etc/init.d
+      register
+  else
+      echo run \"$0 install\" as root to install the rc script in /etc/init.d
+      echo and set OHS to start at system boot
+  fi
+}
+
+register() {
+  if [ "$USER" == "root" ] ; then
+      echo Running chkconfig
+      chkconfig --add ohs
+      chkconfig --list ohs
+  else
+      echo only root can register OHS to run as a service
+  fi
+}
+
+unregister() {
+  if [ "$USER" == "root" ] ; then
+      echo Running chkconfig
+      chkconfig --del ohs
+  else
+      echo only root can unregister OHS to run as a service
+  fi
+}
+
+start() 
+{
+
+    echo "Starting Node Manager"
+    
+    if [ "$USER" == "root" ]; then
+      su - $OHSOWNER -c "$ORACLE_INSTANCE/bin/startNodeManager.sh &> /dev/null &"
+    else
+      $ORACLE_INSTANCE/bin/startNodeManager.sh &> /dev/null &
+    fi
+    
+    echo "Starting Oracle HTTP Server"
+    if [ "$USER" == "root" ]; then
+      su - $OHSOWNER -c "$ORACLE_INSTANCE/bin/startComponent.sh $COMPONENT_NAME"
+    else
+      $ORACLE_INSTANCE/bin/startComponent.sh $COMPONENT_NAME
+    fi
+    
+    status
+ }
+
+stop()
+{
+    echo "Stopping Oracle HTTP Server..."
+
+    if [ "$USER" == "root" ]; then
+      su - $OHSOWNER -c "$ORACLE_INSTANCE/bin/stopComponent.sh $COMPONENT_NAME"
+    else
+      $ORACLE_INSTANCE/bin/stopComponent.sh $COMPONENT_NAME
+    fi
+
+    echo "sleeping 5 seconds to allow complete shutdown"
+    sleep 5
+
+    echo "Stopping Node Manager"
+
+    kill -9 `pidof java`
+    status
+}
+
+status()
+{
+	echo "Node Manager: " `pidof java`
+	echo "OHS: " `pidof httpd.worker`
+}
+
+#### End of functions, beginning of main()
+
+case "$1" in
+ "")
+     usage
+     ;;
+
+ "start")
+     start
+     ;;
+
+ "stop")
+     stop
+     ;;
+
+ "stopall")
+     stopall
+     ;;
+
+ "restart")
+     stop
+     start
+     ;;
+
+ "status")
+     status
+     ;;
+     
+  # service related options (for use by root)
+  install)
+    install
+    ;;
+
+  register)
+    register
+    ;;
+
+  unregister)
+    unregister
+    ;;
+
+  *)
+    usage
+    ;;
+
+esac

@@ -1,0 +1,186 @@
+#!/bin/bash
+#
+# Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+# 
+
+# chkconfig: 345 90 30
+# description: Oracle Weblogic Server startup script
+
+# Author: Chris Johnson (christopher.johnson@oracle.com)
+# Change: Alex Paulo Laner (alex@laner.net.br)
+
+# Please Note that this was written for my own purposes. It may or may
+# not work in your environment.
+
+# When you install this scroll down and edit the environment variables
+# below to match up with your environment.
+
+# Uncomment for script debug
+#set -x
+
+WLS_DOMAIN=/u01/middleware/domains/weblogic_domain
+WLSOWNER=oracle
+
+
+
+##### DO NOT EDIT BELOW HERE #####
+##################################
+
+
+if [ -f /lib/lsb/init-functions ]
+then
+        . /lib/lsb/init-functions
+elif [ -f /etc/init.d/functions ]
+then
+        . /etc/init.d/functions
+fi
+
+if [ "" == "$USER" ]; then
+    USER=`whoami`
+fi
+
+if [ "$USER" == "root" ] ; then
+    # if we're running as root we will need to su to stop or start the server
+    SUCOMMAND_START="/bin/su - $WLSOWNER -c \""
+    SUCOMMAND_END="\""
+
+else
+    # otherwise we don't need a su command
+    SUCOMMAND_START=""
+    SUCOMMAND_END=""
+fi
+
+
+
+usage()
+{
+  #echo "Usage: $0 {start|stop|stopall|restart}"
+  echo "Usage (as root):"
+  echo "  $0 {start|stop|restart|install|register}"
+  echo "Usage (as $WLSOWNER):"
+  echo "  $0 {start|stop|restart}"
+  exit 2
+
+}
+
+install() {
+  if [ "$USER" == "root" ] ; then
+      echo Copying $0 to /etc/init.d
+      cp $0 /etc/init.d
+      register
+  else
+      echo run \"$0 install\" as root to install the rc script in /etc/init.d
+      echo and set Weblogic to start at system boot
+  fi
+}
+
+register() {
+  if [ "$USER" == "root" ] ; then
+      echo Running chkconfig
+      chkconfig --add weblogic
+      chkconfig --list weblogic
+  else
+      echo only root can register Weblogic to run as a service
+  fi
+}
+
+unregister() {
+  if [ "$USER" == "root" ] ; then
+      echo Running chkconfig
+      chkconfig --del weblogic
+  else
+      echo only root can unregister Weblogic to run as a service
+  fi
+}
+
+start() 
+{
+
+    echo "Starting Node Manager"
+    
+    if [ "$USER" == "root" ]; then
+      su - $WLSOWNER -c "$WLS_DOMAIN/bin/startNodeManager.sh &> /dev/null &"
+      sleep 5
+    else
+      $WLS_DOMAIN/bin/startNodeManager.sh &> /dev/null &
+      sleep 5
+    fi
+    
+    echo "Starting Weblogic Admin"
+    if [ "$USER" == "root" ]; then
+      su - $WLSOWNER -c "$WLS_DOMAIN/bin/startWebLogic.sh &> /dev/null &"
+    else
+      $WLS_DOMAIN/bin/startWebLogic.sh &> /dev/null &
+    fi
+    
+ }
+
+stop()
+{
+    echo "Stopping Oracle Weblogic Server..."
+
+    if [ "$USER" == "root" ]; then
+      su - $WLSOWNER -c "$WLS_DOMAIN/bin/stopWebLogic.sh"
+    else
+      $WLS_DOMAIN/bin/stopWebLogic.sh
+    fi
+
+    echo "sleeping 5 seconds to allow complete shutdown"
+    sleep 5
+
+    echo "Stopping Node Manager"
+
+    kill -9 `pidof java`
+}
+
+status()
+{
+	echo "Process Java: " `pidof java`
+}
+
+#### End of functions, beginning of main()
+
+case "$1" in
+ "")
+     usage
+     ;;
+
+ "start")
+     start
+     ;;
+
+ "stop")
+     stop
+     ;;
+
+ "stopall")
+     stopall
+     ;;
+
+ "restart")
+     stop
+     start
+     ;;
+
+ "status")
+     status
+     ;;
+     
+  # service related options (for use by root)
+  install)
+    install
+    ;;
+
+  register)
+    register
+    ;;
+
+  unregister)
+    unregister
+    ;;
+
+  *)
+    usage
+    ;;
+
+esac

@@ -7,6 +7,7 @@
 # description: Oracle HTTP Server startup script
 
 # Author: Chris Johnson (christopher.johnson@oracle.com)
+# Change: Alex Paulo Laner (alex@laner.net.br)
 
 # Please Note that this was written for my own purposes. It may or may
 # not work in your environment.
